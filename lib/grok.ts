@@ -47,7 +47,12 @@ function tweetBlock(t: RawTweet): string {
   ].join("\n");
 }
 
-async function chat(system: string, user: string, maxTokens: number): Promise<string> {
+async function chat(
+  system: string,
+  user: string,
+  maxTokens: number,
+  model = process.env.XAI_MODEL_FILTER ?? "grok-4-1-fast"
+): Promise<string> {
   const key = process.env.XAI_API_KEY;
   if (!key) throw new Error("XAI_API_KEY is not set");
 
@@ -55,7 +60,7 @@ async function chat(system: string, user: string, maxTokens: number): Promise<st
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: process.env.XAI_MODEL_FILTER ?? "grok-4-1-fast",
+      model,
       temperature: 0,
       max_tokens: maxTokens,
       messages: [
@@ -167,7 +172,8 @@ Return the reply text only.`;
   const raw = await chat(
     system,
     `Their tweet:\n${tweetBlock(tweet)}\n\nWho I am / what I sell: ${offerOneLiner}`,
-    200
+    200,
+    process.env.XAI_MODEL_DRAFT ?? process.env.XAI_MODEL_FILTER ?? "grok-4-1-fast"
   );
   return raw.trim().replace(/^["']|["']$/g, "").slice(0, 280);
 }
