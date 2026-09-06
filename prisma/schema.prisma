@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// V0 does not use User yet (no auth). Kept so V1 does not need a rewrite.
+model User {
+  id               String   @id @default(cuid())
+  email            String   @unique
+  whopMembershipId String?  @unique
+  plan             Plan     @default(starter)
+  offerOneLiner    String?
+  alertEmail       String?
+  timezone         String   @default("America/New_York")
+  createdAt        DateTime @default(now())
+
+  niches NicheOnUser[]
+  drafts Draft[]
+}
+
+model Niche {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  queryPack String[]
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  listings Listing[]
+  users    NicheOnUser[]
+}
+
+model NicheOnUser {
+  userId  String
+  nicheId String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  niche   Niche  @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+
+  @@id([userId, nicheId])
+}
+
+/// Raw tweet, deduped on the X tweet id. Written before Grok ever sees it.
+model TweetCache {
+  tweetId    String    @id
+  author     String
+  authorName String?
+  followers  Int?
+  text       String
+  url        String
+  replyCount Int       @default(0)
+  likeCount  Int       @default(0)
+  tweetedAt  DateTime
+  rawJson    Json
+  fetchedAt  DateTime  @default(now())
+  /// null = not yet run through the Grok filter
+  filteredAt DateTime?
+
+  listing Listing?
+
+  @@index([filteredAt])
+  @@index([tweetedAt])
+}
+
+model Listing {
+  id         String        @id @default(cuid())
+  tweetId    String        @unique
+  tweet      TweetCache    @relation(fields: [tweetId], references: [tweetId], onDelete: Cascade)
+  nicheId    String
+  niche      Niche         @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+  category   String
+  urgency    String
+  confidence Float
+  grokReason String
+  crowded    Boolean       @default(false)
+  status     ListingStatus @default(open)
+  expiresAt  DateTime
+  createdAt  DateTime      @default(now())
+
+  drafts Draft[]
+
+  @@index([status, createdAt])
+  @@index([nicheId, status])
+}
+
+model Draft {
+  id        String   @id @default(cuid())
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([listingId])
+}
+
+/// One row per crawl run. Powers /admin/costs.
+model EventLog {
+  id            String   @id @default(cuid())
+  runAt         DateTime @default(now())
+  apiCalls      Int      @default(0)
+  grokCalls     Int      @default(0)
+  tweetsSeen    Int      @default(0)
+  tweetsNew     Int      @default(0)
+  keepers       Int      @default(0)
+  estimatedCost Float    @default(0)
+  note          String?
+
+  @@index([runAt])
+}
+
+enum Plan {
+  starter
+  pro
+}
+
+enum ListingStatus {
+  open
+  crowded
+  expired
+  rejected
+}
